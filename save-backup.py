@@ -31,6 +31,8 @@ class BackupApp(QWidget):
         self.selected_game = None
 
         self.setup_ui()
+        self.save_list.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.save_list.customContextMenuRequested.connect(self.savefile_context_menu)
 
         # Versionscheck beim Start
         self.check_for_update()
@@ -343,6 +345,47 @@ class BackupApp(QWidget):
 
         QMessageBox.information(self, "Wiederhergestellt", f"Backup {backup_date} wurde wiederhergestellt.")
         self.refresh_lists()
+
+    def savefile_context_menu(self, pos: QPoint):
+        item = self.save_list.itemAt(pos)
+        if not item or not self.selected_game:
+            return
+
+        filename = item.text()
+        game_path = self.savegames[self.selected_game]["path"]
+        full_path = os.path.join(game_path, filename)
+
+        menu = QMenu()
+        delete_action = menu.addAction("🗑 Datei/Ordner löschen")
+        rename_action = menu.addAction("✏️ Umbenennen")
+
+        action = menu.exec_(self.save_list.viewport().mapToGlobal(pos))
+
+        if action == delete_action:
+            confirm = QMessageBox.question(self, "Löschen bestätigen", f"Soll '{filename}' wirklich gelöscht werden?",
+                                           QMessageBox.Yes | QMessageBox.No)
+            if confirm == QMessageBox.Yes:
+                try:
+                    if os.path.isfile(full_path):
+                        os.remove(full_path)
+                    elif os.path.isdir(full_path):
+                        shutil.rmtree(full_path)
+                    self.refresh_lists()
+                except Exception as e:
+                    QMessageBox.warning(self, "Fehler", f"Fehler beim Löschen: {e}")
+
+        elif action == rename_action:
+            new_name, ok = QInputDialog.getText(self, "Umbenennen", "Neuer Name:", text=filename)
+            if ok and new_name and new_name != filename:
+                new_path = os.path.join(game_path, new_name)
+                if os.path.exists(new_path):
+                    QMessageBox.warning(self, "Fehler", "Eine Datei/Ordner mit diesem Namen existiert bereits.")
+                    return
+                try:
+                    os.rename(full_path, new_path)
+                    self.refresh_lists()
+                except Exception as e:
+                    QMessageBox.warning(self, "Fehler", f"Umbenennen fehlgeschlagen: {e}")
 
     def edit_note(self, item):
         if not self.selected_game:

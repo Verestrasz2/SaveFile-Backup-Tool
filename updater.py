@@ -6,7 +6,7 @@ import subprocess
 
 # --- KONFIGURATION ---
 GITHUB_VERSION_URL = 'https://raw.githubusercontent.com/Verestrasz2/SaveFile-Backup-Tool/master/version.txt'
-GITHUB_EXE_URL = 'https://github.com/Verestrasz2/FOC_Rechner_Python/releases/latest/download/FOC-Rechner.exe'
+GITHUB_EXE_URL = 'https://github.com/Verestrasz2/SaveFile-Backup-Tool/releases/download/GameFile/save-backup.exe'
 LOCAL_EXE = 'save-backup.exe'
 LOCAL_VERSION_FILE = 'version.txt'
 
