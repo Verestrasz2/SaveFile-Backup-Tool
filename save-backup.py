@@ -1,0 +1,384 @@
+import os
+import json
+import shutil
+import datetime
+import subprocess
+import requests
+from PyQt5.QtWidgets import (
+    QApplication, QWidget, QVBoxLayout, QHBoxLayout,
+    QListWidget, QPushButton, QFileDialog, QComboBox,
+    QLabel, QListWidgetItem, QInputDialog, QMessageBox,
+    QMenu
+)
+from PyQt5.QtGui import QIcon
+from PyQt5.QtCore import QSize, Qt, QPoint
+
+__version__ = "1.0.0"  # aktuelle Script-Version
+
+SAVE_FILE = "save_paths.json"
+BACKUP_DIR = "Backups"
+ICON_DIR = "icons"
+
+class BackupApp(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Savegame Backup Tool")
+        self.setGeometry(100, 100, 800, 400)
+
+        self.savegames = self.load_savegames()
+        self.selected_game = None
+
+        self.setup_ui()
+
+        # Versionscheck beim Start
+        self.check_for_update()
+
+    def check_for_update(self):
+        """
+        Vergleicht lokale version.txt (optional) und Online-Version auf GitHub.
+        Wenn Update verfügbar: fragt Benutzer.
+        Startet updater.exe bei Zustimmung und beendet Programm.
+        """
+        local_version = __version__
+
+        # Versuch, lokale version.txt zu lesen, falls vorhanden
+        local_version_file = "version.txt"
+        if os.path.exists(local_version_file):
+            try:
+                with open(local_version_file, "r", encoding="utf-8") as f:
+                    local_version = f.read().strip()
+            except Exception:
+                pass  # fallback auf __version__
+
+        # Online-Version von GitHub holen
+        github_version_url = "https://raw.githubusercontent.com/DeinBenutzername/DeinRepo/main/latest_version.txt"
+        try:
+            resp = requests.get(github_version_url, timeout=5)
+            if resp.status_code == 200:
+                online_version = resp.text.strip()
+                if self.is_newer_version(online_version, local_version):
+                    # Frage zum Update
+                    res = QMessageBox.question(
+                        self,
+                        "Update verfügbar",
+                        f"Eine neue Version {online_version} ist verfügbar.\n"
+                        f"Du hast Version {local_version}.\n"
+                        "Möchtest du jetzt updaten?",
+                        QMessageBox.Yes | QMessageBox.No
+                    )
+                    if res == QMessageBox.Yes:
+                        self.run_updater()
+        except Exception:
+            # Online-Version nicht erreichbar - ignoriere
+            pass
+
+    def is_newer_version(self, online, local):
+        """Vergleicht Versionsstrings, Return True wenn online > local"""
+        def to_tuple(v):
+            return tuple(int(x) for x in v.split(".") if x.isdigit())
+        try:
+            return to_tuple(online) > to_tuple(local)
+        except Exception:
+            return False
+
+    def run_updater(self):
+        """
+        Startet updater.exe und beendet das Hauptprogramm.
+        """
+        updater_path = "updater.exe"  # Pfad zur updater.exe, ggf. anpassen
+        try:
+            subprocess.Popen([updater_path])
+        except Exception as e:
+            QMessageBox.warning(self, "Update-Fehler", f"Updater konnte nicht gestartet werden:\n{e}")
+            return
+        QApplication.quit()
+
+    def setup_ui(self):
+        main_layout = QVBoxLayout()
+
+        # Obere Leiste mit Spielauswahl und Buttons
+        top_layout = QHBoxLayout()
+        self.game_dropdown = QComboBox()
+        self.game_dropdown.currentIndexChanged.connect(self.change_game)
+
+        self.add_game_btn = QPushButton("+ Spiel hinzufügen")
+        self.add_game_btn.clicked.connect(self.add_game)
+
+        self.edit_game_btn = QPushButton("Spiel bearbeiten")
+        self.edit_game_btn.clicked.connect(self.show_game_edit_menu)
+
+        top_layout.addWidget(QLabel("Spiel:"))
+        top_layout.addWidget(self.game_dropdown)
+        top_layout.addWidget(self.add_game_btn)
+        top_layout.addWidget(self.edit_game_btn)
+        main_layout.addLayout(top_layout)
+
+        # Hauptbereich: Links Savegames, Mitte Buttons, Rechts Backups
+        list_layout = QHBoxLayout()
+
+        self.save_list = QListWidget()
+        self.backup_list = QListWidget()
+
+        self.save_list.setIconSize(QSize(32, 32))
+        self.backup_list.setIconSize(QSize(32, 32))
+
+        # Linke Liste: Mehrfachauswahl für einzelne Dateien/Ordner
+        self.save_list.setSelectionMode(QListWidget.ExtendedSelection)
+        # Rechte Liste: Single Selection (Backup-Ordner)
+        self.backup_list.setSelectionMode(QListWidget.SingleSelection)
+
+        # Kontextmenü für Backup-Liste aktivieren
+        self.backup_list.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.backup_list.customContextMenuRequested.connect(self.backup_context_menu)
+
+        button_layout = QVBoxLayout()
+        self.backup_btn = QPushButton("→ Backup")
+        self.backup_btn.clicked.connect(self.backup_savegame)
+
+        self.restore_btn = QPushButton("← Restore")
+        self.restore_btn.clicked.connect(self.restore_savegame)
+
+        button_layout.addStretch()
+        button_layout.addWidget(self.backup_btn)
+        button_layout.addWidget(self.restore_btn)
+        button_layout.addStretch()
+
+        list_layout.addWidget(self.save_list)
+        list_layout.addLayout(button_layout)
+        list_layout.addWidget(self.backup_list)
+
+        main_layout.addLayout(list_layout)
+        self.setLayout(main_layout)
+
+        self.backup_list.itemDoubleClicked.connect(self.edit_note)
+
+        self.refresh_game_dropdown()
+
+    def add_game(self):
+        path = QFileDialog.getExistingDirectory(self, "Savegame-Verzeichnis wählen")
+        if path:
+            name, ok = QInputDialog.getText(self, "Spielname", "Name des Spiels:")
+            if ok and name:
+                icon_path, _ = QFileDialog.getOpenFileName(self, "Icon auswählen", "", "Bilder (*.png *.jpg *.ico)")
+                if icon_path:
+                    os.makedirs(ICON_DIR, exist_ok=True)
+                    icon_dest = os.path.join(ICON_DIR, f"{name}.png")
+                    shutil.copy(icon_path, icon_dest)
+                else:
+                    icon_dest = ""
+
+                self.savegames[name] = {"path": path, "icon": icon_dest}
+                self.save_savegames()
+                self.refresh_game_dropdown()
+                self.game_dropdown.setCurrentText(name)
+
+    def show_game_edit_menu(self):
+        if not self.selected_game:
+            QMessageBox.warning(self, "Kein Spiel ausgewählt", "Bitte zuerst ein Spiel auswählen.")
+            return
+
+        menu = QMenu()
+
+        action_icon = menu.addAction("🖼 Icon ändern")
+        action_path = menu.addAction("📁 Pfad ändern")
+        action_delete = menu.addAction("🗑 Spiel löschen")
+
+        action = menu.exec_(self.edit_game_btn.mapToGlobal(self.edit_game_btn.rect().bottomLeft()))
+        game = self.selected_game
+
+        if action == action_icon:
+            icon_path, _ = QFileDialog.getOpenFileName(self, "Neues Icon", "", "Bilder (*.png *.jpg *.ico)")
+            if icon_path:
+                dest = os.path.join(ICON_DIR, f"{game}.png")
+                shutil.copy(icon_path, dest)
+                self.savegames[game]["icon"] = dest
+                self.save_savegames()
+                self.refresh_lists()
+
+        elif action == action_path:
+            new_path = QFileDialog.getExistingDirectory(self, "Neuer Savegame-Pfad")
+            if new_path:
+                self.savegames[game]["path"] = new_path
+                self.save_savegames()
+                self.refresh_lists()
+
+        elif action == action_delete:
+            confirm = QMessageBox.question(self, "Löschen bestätigen", f"{game} wirklich löschen?", QMessageBox.Yes | QMessageBox.No)
+            if confirm == QMessageBox.Yes:
+                self.savegames.pop(game)
+                self.save_savegames()
+                self.refresh_game_dropdown()
+                self.save_list.clear()
+                self.backup_list.clear()
+                self.selected_game = None
+
+    def change_game(self, index):
+        if index == -1:
+            return
+        game = self.game_dropdown.currentText()
+        self.selected_game = game
+        self.refresh_lists()
+
+    def refresh_game_dropdown(self):
+        self.game_dropdown.clear()
+        self.game_dropdown.addItems(self.savegames.keys())
+
+    def refresh_lists(self):
+        self.save_list.clear()
+        self.backup_list.clear()
+        if not self.selected_game:
+            return
+
+        data = self.savegames[self.selected_game]
+        path = data["path"]
+        icon_path = data.get("icon", "")
+        icon = QIcon(icon_path) if os.path.exists(icon_path) else QIcon()
+
+        # Savegames anzeigen (Dateien/Ordner im Savegame-Ordner)
+        if os.path.exists(path):
+            for fname in os.listdir(path):
+                item = QListWidgetItem(fname)
+                item.setIcon(icon)
+                self.save_list.addItem(item)
+
+        # Backups sortiert anzeigen
+        b_path = os.path.join(BACKUP_DIR, self.selected_game)
+        if os.path.exists(b_path):
+            backups = os.listdir(b_path)
+
+            def parse_date(name):
+                try:
+                    return datetime.datetime.strptime(name, "%Y-%m-%d_%H-%M-%S")
+                except ValueError:
+                    return datetime.datetime.min
+
+            backups.sort(key=parse_date, reverse=True)  # Neueste zuerst
+
+            notes = self.savegames[self.selected_game].get("notes", {})
+
+            for date in backups:
+                item = QListWidgetItem(date)
+                item.setIcon(icon)
+                if note := notes.get(date):
+                    item.setToolTip(note)
+                self.backup_list.addItem(item)
+
+    def backup_savegame(self):
+        if not self.selected_game:
+            return
+
+        selected_files = self.save_list.selectedItems()
+        if not selected_files:
+            QMessageBox.warning(self, "Keine Dateien ausgewählt", "Bitte wähle mindestens eine Datei links aus.")
+            return
+
+        src_path = self.savegames[self.selected_game]["path"]
+        if not os.path.exists(src_path):
+            QMessageBox.warning(self, "Pfad nicht gefunden", "Savegame-Pfad existiert nicht.")
+            return
+
+        now = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        dst = os.path.join(BACKUP_DIR, self.selected_game, now)
+        os.makedirs(dst, exist_ok=True)
+
+        for item in selected_files:
+            filename = item.text()
+            src_file = os.path.join(src_path, filename)
+            dst_file = os.path.join(dst, filename)
+
+            try:
+                if os.path.isfile(src_file):
+                    shutil.copy2(src_file, dst_file)
+                elif os.path.isdir(src_file):
+                    shutil.copytree(src_file, dst_file)
+            except Exception as e:
+                QMessageBox.warning(self, "Fehler", f"Fehler beim Kopieren von {filename}: {e}")
+
+        QMessageBox.information(self, "Backup erstellt", f"Backup mit {len(selected_files)} Datei(en) wurde erstellt.")
+        self.refresh_lists()
+
+    def restore_savegame(self):
+        if not self.selected_game:
+            return
+
+        selected_backup = self.backup_list.currentItem()
+        if not selected_backup:
+            QMessageBox.warning(self, "Kein Backup ausgewählt", "Bitte wähle ein Backup aus der rechten Liste.")
+            return
+
+        backup_date = selected_backup.text()
+        backup_path = os.path.join(BACKUP_DIR, self.selected_game, backup_date)
+        savegame_path = self.savegames[self.selected_game]["path"]
+
+        if not os.path.exists(backup_path):
+            QMessageBox.warning(self, "Backup nicht gefunden", "Backup-Ordner existiert nicht.")
+            return
+
+        # Komplettes Savegame-Verzeichnis löschen und Backup wiederherstellen
+        if os.path.exists(savegame_path):
+            try:
+                shutil.rmtree(savegame_path)
+            except Exception as e:
+                QMessageBox.warning(self, "Fehler", f"Fehler beim Löschen des Savegame-Ordners: {e}")
+                return
+
+        try:
+            shutil.copytree(backup_path, savegame_path)
+        except Exception as e:
+            QMessageBox.warning(self, "Fehler", f"Fehler beim Wiederherstellen: {e}")
+            return
+
+        QMessageBox.information(self, "Wiederhergestellt", f"Backup {backup_date} wurde wiederhergestellt.")
+        self.refresh_lists()
+
+    def edit_note(self, item):
+        if not self.selected_game:
+            return
+
+        text, ok = QInputDialog.getMultiLineText(self, "Notiz bearbeiten", f"Notiz zu Backup {item.text()}:", item.toolTip())
+        if ok:
+            notes = self.savegames[self.selected_game].setdefault("notes", {})
+            notes[item.text()] = text
+            self.save_savegames()
+            item.setToolTip(text)
+
+    def backup_context_menu(self, pos: QPoint):
+        item = self.backup_list.itemAt(pos)
+        if not item:
+            return
+
+        menu = QMenu()
+        delete_action = menu.addAction("Backup löschen")
+
+        action = menu.exec_(self.backup_list.viewport().mapToGlobal(pos))
+        if action == delete_action:
+            reply = QMessageBox.question(self, "Backup löschen", f"Backup '{item.text()}' wirklich löschen?", QMessageBox.Yes | QMessageBox.No)
+            if reply == QMessageBox.Yes:
+                backup_path = os.path.join(BACKUP_DIR, self.selected_game, item.text())
+                try:
+                    if os.path.exists(backup_path):
+                        shutil.rmtree(backup_path)
+                    # Backup auch aus Notizen entfernen, falls vorhanden
+                    notes = self.savegames[self.selected_game].get("notes", {})
+                    if item.text() in notes:
+                        del notes[item.text()]
+                        self.save_savegames()
+                    self.refresh_lists()
+                except Exception as e:
+                    QMessageBox.warning(self, "Fehler", f"Löschen fehlgeschlagen: {e}")
+
+    def save_savegames(self):
+        with open(SAVE_FILE, "w", encoding="utf-8") as f:
+            json.dump(self.savegames, f, indent=2, ensure_ascii=False)
+
+    def load_savegames(self):
+        if os.path.exists(SAVE_FILE):
+            with open(SAVE_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        return {}
+
+if __name__ == "__main__":
+    app = QApplication([])
+    window = BackupApp()
+    window.show()
+    app.exec_()

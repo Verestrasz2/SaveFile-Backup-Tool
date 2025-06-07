@@ -1,0 +1,25 @@
+{
+  "MhRise": {
+    "path": "D:/GAME_SAVES/MH-Rise_Saves/mh rise/august_22",
+    "icon": "icons\\MhRise.png",
+    "notes": {}
+  },
+  "world": {
+    "path": "D:/GAME_SAVES/MH-Rise_Saves/mh rise/august_22",
+    "icon": "icons\\world.png"
+  },
+  "deplay": {
+    "path": "D:/GAME_SAVES/MH-Rise_Saves/mh rise/mai23/win64_save",
+    "icon": "icons\\deplay.png",
+    "notes": {}
+  },
+  "bg3": {
+    "path": "C:/Users/danie/AppData/Local/Larian Studios/Baldur's Gate 3/PlayerProfiles/Public/Savegames/Story",
+    "icon": "icons\\bg3.png",
+    "notes": {}
+  },
+  "test": {
+    "path": "D:/GAME_SAVES/MH-Rise_Saves/mh rise/august_22",
+    "icon": "icons\\test.png"
+  }
+}
