@@ -4,6 +4,7 @@ import shutil
 import datetime
 import subprocess
 import requests
+from PyQt5 import sip
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout,
     QListWidget, QPushButton, QFileDialog, QComboBox,
@@ -23,6 +24,7 @@ class BackupApp(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Savegame Backup Tool")
+        self.setWindowIcon(QIcon("icons/saveicon.png"))
         self.setGeometry(100, 100, 800, 400)
 
         self.savegames = self.load_savegames()
@@ -51,7 +53,7 @@ class BackupApp(QWidget):
                 pass  # fallback auf __version__
 
         # Online-Version von GitHub holen
-        github_version_url = "https://raw.githubusercontent.com/DeinBenutzername/DeinRepo/main/latest_version.txt"
+        github_version_url = 'https://raw.githubusercontent.com/Verestrasz2/SaveFile-Backup-Tool/master/version.txt'
         try:
             resp = requests.get(github_version_url, timeout=5)
             if resp.status_code == 200:
@@ -248,7 +250,7 @@ class BackupApp(QWidget):
 
             def parse_date(name):
                 try:
-                    return datetime.datetime.strptime(name, "%Y-%m-%d_%H-%M-%S")
+                    return datetime.datetime.strptime(name, "%d.%m.%Y_%H-%M-%S")
                 except ValueError:
                     return datetime.datetime.min
 
@@ -277,9 +279,11 @@ class BackupApp(QWidget):
             QMessageBox.warning(self, "Pfad nicht gefunden", "Savegame-Pfad existiert nicht.")
             return
 
-        now = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        now = datetime.datetime.now().strftime("%d.%m.%Y_%H-%M-%S")
         dst = os.path.join(BACKUP_DIR, self.selected_game, now)
         os.makedirs(dst, exist_ok=True)
+
+        copied_files = []
 
         for item in selected_files:
             filename = item.text()
@@ -291,10 +295,16 @@ class BackupApp(QWidget):
                     shutil.copy2(src_file, dst_file)
                 elif os.path.isdir(src_file):
                     shutil.copytree(src_file, dst_file)
+                copied_files.append(filename)  # Datei wurde kopiert
             except Exception as e:
                 QMessageBox.warning(self, "Fehler", f"Fehler beim Kopieren von {filename}: {e}")
 
-        QMessageBox.information(self, "Backup erstellt", f"Backup mit {len(selected_files)} Datei(en) wurde erstellt.")
+        # Speichere die Liste der Dateien als Notiz zum Backup
+        notes = self.savegames[self.selected_game].setdefault("notes", {})
+        notes[now] = "Backed up files:\n" + "\n".join(copied_files)
+        self.save_savegames()
+
+        QMessageBox.information(self, "Backup erstellt", f"Backup mit {len(copied_files)} Datei(en) wurde erstellt.")
         self.refresh_lists()
 
     def restore_savegame(self):
@@ -314,16 +324,19 @@ class BackupApp(QWidget):
             QMessageBox.warning(self, "Backup nicht gefunden", "Backup-Ordner existiert nicht.")
             return
 
-        # Komplettes Savegame-Verzeichnis löschen und Backup wiederherstellen
-        if os.path.exists(savegame_path):
-            try:
-                shutil.rmtree(savegame_path)
-            except Exception as e:
-                QMessageBox.warning(self, "Fehler", f"Fehler beim Löschen des Savegame-Ordners: {e}")
-                return
-
+        # Statt komplettes Verzeichnis zu löschen, Dateien einzeln kopieren / überschreiben
         try:
-            shutil.copytree(backup_path, savegame_path)
+            for root, dirs, files in os.walk(backup_path):
+                # Zielverzeichnis entsprechend der Struktur ermitteln
+                relative_path = os.path.relpath(root, backup_path)
+                target_dir = os.path.join(savegame_path, relative_path)
+                os.makedirs(target_dir, exist_ok=True)
+
+                for file in files:
+                    src_file = os.path.join(root, file)
+                    dst_file = os.path.join(target_dir, file)
+                    shutil.copy2(src_file, dst_file)  # überschreibt automatisch, falls Datei existiert
+
         except Exception as e:
             QMessageBox.warning(self, "Fehler", f"Fehler beim Wiederherstellen: {e}")
             return
@@ -349,10 +362,12 @@ class BackupApp(QWidget):
 
         menu = QMenu()
         delete_action = menu.addAction("Backup löschen")
+        rename_action = menu.addAction("Backup umbenennen")
 
         action = menu.exec_(self.backup_list.viewport().mapToGlobal(pos))
         if action == delete_action:
-            reply = QMessageBox.question(self, "Backup löschen", f"Backup '{item.text()}' wirklich löschen?", QMessageBox.Yes | QMessageBox.No)
+            reply = QMessageBox.question(self, "Backup löschen", f"Backup '{item.text()}' wirklich löschen?",
+                                         QMessageBox.Yes | QMessageBox.No)
             if reply == QMessageBox.Yes:
                 backup_path = os.path.join(BACKUP_DIR, self.selected_game, item.text())
                 try:
@@ -366,6 +381,28 @@ class BackupApp(QWidget):
                     self.refresh_lists()
                 except Exception as e:
                     QMessageBox.warning(self, "Fehler", f"Löschen fehlgeschlagen: {e}")
+
+        elif action == rename_action:
+            old_name = item.text()
+            new_name, ok = QInputDialog.getText(self, "Backup umbenennen", "Neuer Name für das Backup:", text=old_name)
+            if ok and new_name and new_name != old_name:
+                old_path = os.path.join(BACKUP_DIR, self.selected_game, old_name)
+                new_path = os.path.join(BACKUP_DIR, self.selected_game, new_name)
+
+                if os.path.exists(new_path):
+                    QMessageBox.warning(self, "Fehler", "Ein Backup mit diesem Namen existiert bereits.")
+                    return
+
+                try:
+                    os.rename(old_path, new_path)
+                    # Notizen umbenennen
+                    notes = self.savegames[self.selected_game].get("notes", {})
+                    if old_name in notes:
+                        notes[new_name] = notes.pop(old_name)
+                        self.save_savegames()
+                    self.refresh_lists()
+                except Exception as e:
+                    QMessageBox.warning(self, "Fehler", f"Umbenennen fehlgeschlagen: {e}")
 
     def save_savegames(self):
         with open(SAVE_FILE, "w", encoding="utf-8") as f:

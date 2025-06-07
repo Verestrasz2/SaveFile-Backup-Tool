@@ -2,7 +2,11 @@
   "MhRise": {
     "path": "D:/GAME_SAVES/MH-Rise_Saves/mh rise/august_22",
     "icon": "icons\\MhRise.png",
-    "notes": {}
+    "notes": {
+      "2025-06-07_20-18-10": "Backed up files:\nSS1_data337Slot.bin\nSS1_data001Slot.bin\nSS1_data036Slot.bin\nSS1_data037Slot.bin",
+      "2025-06-07_21-31-29": "Backed up files:\nSS1_data337Slot.bin",
+      "07.06.2025_21-41-23": "Backed up files:\nSS1_data337Slot.bin"
+    }
   },
   "world": {
     "path": "D:/GAME_SAVES/MH-Rise_Saves/mh rise/august_22",
@@ -14,12 +18,21 @@
     "notes": {}
   },
   "bg3": {
-    "path": "C:/Users/danie/AppData/Local/Larian Studios/Baldur's Gate 3/PlayerProfiles/Public/Savegames/Story",
+    "path": "C:/Users/danie/AppData/Local/Larian Studios/Baldur's Gate 3/PlayerProfiles/Verestrasz/Savegames/Story",
     "icon": "icons\\bg3.png",
-    "notes": {}
+    "notes": {
+      "2025-06-07_20-33-29": "Backed up files:\nAutoSave_9"
+    }
   },
   "test": {
     "path": "D:/GAME_SAVES/MH-Rise_Saves/mh rise/august_22",
-    "icon": "icons\\test.png"
+    "icon": "icons\\test.png",
+    "notes": {
+      "2025-06-07_21-32-38": "Backed up files:\nSS1_data036Slot.bin"
+    }
+  },
+  "Monster Hunter Wilds": {
+    "path": "D:/GAME_SAVES/MHWilds-Backup/Backup 29-03-2025 23-50/C/Program Files (x86)/Steam/userdata/110106957/3065170/remote/win64_save",
+    "icon": ""
   }
 }
