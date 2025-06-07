@@ -13,6 +13,9 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtGui import QIcon
 from PyQt5.QtCore import QSize, Qt, QPoint
+from PyQt5.QtWidgets import (
+    QGroupBox, QSizePolicy, QScrollArea, QAbstractItemView
+)
 
 __version__ = "1.0.0"  # aktuelle Script-Version
 
@@ -98,48 +101,83 @@ class BackupApp(QWidget):
         QApplication.quit()
 
     def setup_ui(self):
+        self.setMinimumSize(900, 500)
+        self.resize(1100, 600)
+
+        # Dark Theme
+        self.setStyleSheet("""
+            QWidget {
+                background-color: #2b2b2b;
+                color: #ffffff;
+                font-size: 14px;
+            }
+            QPushButton {
+                background-color: #3c3f41;
+                border: 1px solid #555;
+                padding: 6px;
+            }
+            QPushButton:hover {
+                background-color: #4e5254;
+            }
+            QComboBox, QListWidget {
+                background-color: #3c3f41;
+                border: 1px solid #555;
+            }
+            QGroupBox {
+                border: 1px solid #666;
+                margin-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                subcontrol-position: top left;
+                padding: 0 5px;
+            }
+        """)
+
         main_layout = QVBoxLayout()
 
         # Obere Leiste mit Spielauswahl und Buttons
         top_layout = QHBoxLayout()
         self.game_dropdown = QComboBox()
+        self.game_dropdown.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.game_dropdown.currentIndexChanged.connect(self.change_game)
 
-        self.add_game_btn = QPushButton("+ Spiel hinzufügen")
-        self.add_game_btn.clicked.connect(self.add_game)
+        self.add_game_btn = QPushButton("+ Add Game")
+        self.edit_game_btn = QPushButton("Edit Game")
+        self.help_btn = QPushButton("Anleitung")
+        self.help_btn.clicked.connect(self.show_help_dialog)
+        top_layout.addWidget(self.help_btn)
 
-        self.edit_game_btn = QPushButton("Spiel bearbeiten")
+        self.add_game_btn.clicked.connect(self.add_game)
         self.edit_game_btn.clicked.connect(self.show_game_edit_menu)
 
-        top_layout.addWidget(QLabel("Spiel:"))
+        top_layout.addWidget(QLabel("Game:"))
         top_layout.addWidget(self.game_dropdown)
         top_layout.addWidget(self.add_game_btn)
         top_layout.addWidget(self.edit_game_btn)
         main_layout.addLayout(top_layout)
 
-        # Hauptbereich: Links Savegames, Mitte Buttons, Rechts Backups
+        # Hauptbereich
         list_layout = QHBoxLayout()
 
+        # --- Savegame-List (Left)
+        save_group = QGroupBox("Savegame Files")
+        save_layout = QVBoxLayout()
+
         self.save_list = QListWidget()
-        self.backup_list = QListWidget()
-
         self.save_list.setIconSize(QSize(32, 32))
-        self.backup_list.setIconSize(QSize(32, 32))
-
-        # Linke Liste: Mehrfachauswahl für einzelne Dateien/Ordner
         self.save_list.setSelectionMode(QListWidget.ExtendedSelection)
-        # Rechte Liste: Single Selection (Backup-Ordner)
-        self.backup_list.setSelectionMode(QListWidget.SingleSelection)
+        self.save_list.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
+        save_layout.addWidget(self.save_list)
 
-        # Kontextmenü für Backup-Liste aktivieren
-        self.backup_list.setContextMenuPolicy(Qt.CustomContextMenu)
-        self.backup_list.customContextMenuRequested.connect(self.backup_context_menu)
+        save_group.setLayout(save_layout)
+        list_layout.addWidget(save_group, 4)
 
+        # --- Middle Buttons
         button_layout = QVBoxLayout()
         self.backup_btn = QPushButton("→ Backup")
-        self.backup_btn.clicked.connect(self.backup_savegame)
-
         self.restore_btn = QPushButton("← Restore")
+        self.backup_btn.clicked.connect(self.backup_savegame)
         self.restore_btn.clicked.connect(self.restore_savegame)
 
         button_layout.addStretch()
@@ -147,14 +185,26 @@ class BackupApp(QWidget):
         button_layout.addWidget(self.restore_btn)
         button_layout.addStretch()
 
-        list_layout.addWidget(self.save_list)
-        list_layout.addLayout(button_layout)
-        list_layout.addWidget(self.backup_list)
+        list_layout.addLayout(button_layout, 1)
+
+        # --- Backup-List (Right)
+        backup_group = QGroupBox("Backups")
+        backup_layout = QVBoxLayout()
+
+        self.backup_list = QListWidget()
+        self.backup_list.setIconSize(QSize(32, 32))
+        self.backup_list.setSelectionMode(QListWidget.SingleSelection)
+        self.backup_list.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
+        self.backup_list.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.backup_list.customContextMenuRequested.connect(self.backup_context_menu)
+        self.backup_list.itemDoubleClicked.connect(self.edit_note)
+
+        backup_layout.addWidget(self.backup_list)
+        backup_group.setLayout(backup_layout)
+        list_layout.addWidget(backup_group, 4)
 
         main_layout.addLayout(list_layout)
         self.setLayout(main_layout)
-
-        self.backup_list.itemDoubleClicked.connect(self.edit_note)
 
         self.refresh_game_dropdown()
 
@@ -175,6 +225,29 @@ class BackupApp(QWidget):
                 self.save_savegames()
                 self.refresh_game_dropdown()
                 self.game_dropdown.setCurrentText(name)
+
+    def show_help_dialog(self):
+        help_text = (
+            "<b>Willkommen beim Savegame Backup Tool!</b><br><br>"
+            "<b>Allgemeine Funktionen:</b><br>"
+            "• Links: Savegame-Dateien und Ordner aus dem Spielordner<br>"
+            "• Rechts: Backups dieser Dateien, sortiert nach Datum<br>"
+            "• Mittig: Mit den Pfeil-Buttons kannst du Backups erstellen oder wiederherstellen<br><br>"
+
+            "<b>Rechtsklick-Funktionen:</b><br>"
+            "• <u>Links (Savegame-Dateien):</u> Löschen oder Umbenennen von Savegame-Dateien<br>"
+            "• <u>Rechts (Backup-Einträge):</u> Löschen oder Umbenennen von Backup-Ordnern<br><br>"
+
+            "<b>Doppelklick:</b><br>"
+            "• <u>Backup-Eintrag (rechts):</u> Notiz zum Backup anzeigen/bearbeiten<br><br>"
+
+            "<b>Tipp:</b><br>"
+            "• Du kannst mehrere Dateien gleichzeitig auswählen, indem du Strg gedrückt hältst.<br>"
+            "• Spiel-Icons können automatisch geladen oder manuell gesetzt werden.<br>"
+            "• Das Layout passt sich der Fenstergröße an.<br>"
+        )
+
+        QMessageBox.information(self, "Anleitung", help_text)
 
     def show_game_edit_menu(self):
         if not self.selected_game:
