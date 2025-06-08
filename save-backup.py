@@ -193,6 +193,7 @@ class BackupApp(QWidget):
 
         list_layout.addLayout(button_layout, 1)
 
+
         # --- Backup-List (Right)
         backup_group = QGroupBox("Backups")
         backup_layout = QVBoxLayout()
@@ -278,7 +279,8 @@ class BackupApp(QWidget):
 
             "<b>Rechtsklick-Funktionen:</b><br>"
             "• <u>Links (Savegame-Dateien):</u> Löschen oder Umbenennen von Savegame-Dateien<br>"
-            "• <u>Rechts (Backup-Einträge):</u> Löschen oder Umbenennen von Backup-Ordnern<br><br>"
+            "• <u>Rechts (Backup-Einträge):</u> Löschen oder Umbenennen von Backup-Ordnernbr<br>"
+            "• <u>Rechts (Backup-Einträge):</u> Markiere deine Favoriten um alles im Blick zu haben<br><br>"
 
             "<b>Doppelklick:</b><br>"
             "• <u>Backup-Eintrag (rechts):</u> Notiz zum Backup anzeigen/bearbeiten<br><br>"
@@ -374,12 +376,24 @@ class BackupApp(QWidget):
             backups.sort(key=parse_date, reverse=True)  # Neueste zuerst
 
             notes = self.savegames[self.selected_game].get("notes", {})
+            favorites = self.savegames[self.selected_game].get("favorites", [])
 
             for date in backups:
                 item = QListWidgetItem(date)
                 item.setIcon(icon)
+
+                # Tooltip mit Notiz anzeigen, falls vorhanden
                 if note := notes.get(date):
                     item.setToolTip(note)
+
+                # Falls Favorit: Sternsymbol + gelbe Farbe + fett
+                if date in favorites:
+                    item.setText(f"⭐ {date}")
+                    item.setForeground(Qt.darkYellow)
+                    font = item.font()
+                    font.setBold(True)
+                    item.setFont(font)
+
                 self.backup_list.addItem(item)
 
     def backup_savegame(self):
@@ -519,48 +533,70 @@ class BackupApp(QWidget):
             return
 
         menu = QMenu()
-        delete_action = menu.addAction("Backup löschen")
-        rename_action = menu.addAction("Backup umbenennen")
+        delete_action = menu.addAction("🗑 Backup löschen")
+        rename_action = menu.addAction("✏️ Backup umbenennen")
+        favorite_action = menu.addAction("⭐ Als Favorit markieren")
 
         action = menu.exec_(self.backup_list.viewport().mapToGlobal(pos))
+        backup_name = item.text()
+
         if action == delete_action:
-            reply = QMessageBox.question(self, "Backup löschen", f"Backup '{item.text()}' wirklich löschen?",
+            reply = QMessageBox.question(self, "Backup löschen", f"Backup '{backup_name}' wirklich löschen?",
                                          QMessageBox.Yes | QMessageBox.No)
             if reply == QMessageBox.Yes:
-                backup_path = os.path.join(BACKUP_DIR, self.selected_game, item.text())
+                backup_path = os.path.join(BACKUP_DIR, self.selected_game, backup_name)
                 try:
                     if os.path.exists(backup_path):
                         shutil.rmtree(backup_path)
-                    # Backup auch aus Notizen entfernen, falls vorhanden
+
                     notes = self.savegames[self.selected_game].get("notes", {})
-                    if item.text() in notes:
-                        del notes[item.text()]
-                        self.save_savegames()
+                    if backup_name in notes:
+                        del notes[backup_name]
+
+                    favorites = self.savegames[self.selected_game].get("favorites", [])
+                    if backup_name in favorites:
+                        favorites.remove(backup_name)
+
+                    self.save_savegames()
                     self.refresh_lists()
                 except Exception as e:
                     QMessageBox.warning(self, "Fehler", f"Löschen fehlgeschlagen: {e}")
 
         elif action == rename_action:
-            old_name = item.text()
-            new_name, ok = QInputDialog.getText(self, "Backup umbenennen", "Neuer Name für das Backup:", text=old_name)
-            if ok and new_name and new_name != old_name:
-                old_path = os.path.join(BACKUP_DIR, self.selected_game, old_name)
+            new_name, ok = QInputDialog.getText(self, "Backup umbenennen", "Neuer Name:", text=backup_name)
+            if ok and new_name and new_name != backup_name:
+                old_path = os.path.join(BACKUP_DIR, self.selected_game, backup_name)
                 new_path = os.path.join(BACKUP_DIR, self.selected_game, new_name)
-
                 if os.path.exists(new_path):
-                    QMessageBox.warning(self, "Fehler", "Ein Backup mit diesem Namen existiert bereits.")
+                    QMessageBox.warning(self, "Fehler", "Es existiert bereits ein Backup mit diesem Namen.")
                     return
 
                 try:
                     os.rename(old_path, new_path)
-                    # Notizen umbenennen
+
+                    # Notizen & Favoriten umbenennen
                     notes = self.savegames[self.selected_game].get("notes", {})
-                    if old_name in notes:
-                        notes[new_name] = notes.pop(old_name)
-                        self.save_savegames()
+                    if backup_name in notes:
+                        notes[new_name] = notes.pop(backup_name)
+
+                    favorites = self.savegames[self.selected_game].get("favorites", [])
+                    if backup_name in favorites:
+                        favorites.remove(backup_name)
+                        favorites.append(new_name)
+
+                    self.save_savegames()
                     self.refresh_lists()
                 except Exception as e:
                     QMessageBox.warning(self, "Fehler", f"Umbenennen fehlgeschlagen: {e}")
+
+        elif action == favorite_action:
+            favorites = self.savegames[self.selected_game].setdefault("favorites", [])
+            if backup_name not in favorites:
+                favorites.append(backup_name)
+            else:
+                favorites.remove(backup_name)  # Toggle-Funktion
+            self.save_savegames()
+            self.refresh_lists()
 
     def save_savegames(self):
         with open(SAVE_FILE, "w", encoding="utf-8") as f:
