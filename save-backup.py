@@ -146,7 +146,12 @@ class BackupApp(QWidget):
         self.edit_game_btn = QPushButton("Edit Game")
         self.help_btn = QPushButton("Anleitung")
         self.help_btn.clicked.connect(self.show_help_dialog)
+        self.add_ext_save_btn = QPushButton("+ Add ext. Save")
+        self.add_ext_save_btn.clicked.connect(self.add_external_save_files)
         top_layout.addWidget(self.help_btn)
+        top_layout.addWidget(self.add_ext_save_btn)
+        # Neuer Button: Externe Saves hinzufügen
+
 
         self.add_game_btn.clicked.connect(self.add_game)
         self.edit_game_btn.clicked.connect(self.show_game_edit_menu)
@@ -155,6 +160,7 @@ class BackupApp(QWidget):
         top_layout.addWidget(self.game_dropdown)
         top_layout.addWidget(self.add_game_btn)
         top_layout.addWidget(self.edit_game_btn)
+
         main_layout.addLayout(top_layout)
 
         # Hauptbereich
@@ -225,6 +231,42 @@ class BackupApp(QWidget):
                 self.save_savegames()
                 self.refresh_game_dropdown()
                 self.game_dropdown.setCurrentText(name)
+
+    def add_external_save_files(self):
+        if not self.selected_game:
+            QMessageBox.warning(self, "Kein Spiel ausgewählt", "Bitte wähle zuerst ein Spiel aus.")
+            return
+
+        files, _ = QFileDialog.getOpenFileNames(self, "Externe Save-Dateien auswählen")
+        if not files:
+            return
+
+        target_dir = self.savegames[self.selected_game]["path"]
+        added_count = 0
+
+        for file_path in files:
+            filename = os.path.basename(file_path)
+            target_path = os.path.join(target_dir, filename)
+
+            if os.path.exists(target_path):
+                reply = QMessageBox.question(
+                    self,
+                    "Datei existiert bereits",
+                    f"Die Datei '{filename}' existiert bereits. Überschreiben?",
+                    QMessageBox.Yes | QMessageBox.No
+                )
+                if reply != QMessageBox.Yes:
+                    continue
+
+            try:
+                shutil.copy2(file_path, target_path)
+                added_count += 1
+            except Exception as e:
+                QMessageBox.warning(self, "Fehler", f"Konnte {filename} nicht kopieren: {e}")
+
+        if added_count:
+            QMessageBox.information(self, "Dateien hinzugefügt", f"{added_count} Datei(en) wurden erfolgreich kopiert.")
+            self.refresh_lists()
 
     def show_help_dialog(self):
         help_text = (
