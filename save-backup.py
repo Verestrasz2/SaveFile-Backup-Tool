@@ -532,13 +532,23 @@ class BackupApp(QWidget):
         if not item:
             return
 
+        raw_backup_name = item.text()
+        # Entferne Sternsymbol bei Favoriten
+        backup_name = raw_backup_name.replace("⭐ ", "").strip()
+
         menu = QMenu()
         delete_action = menu.addAction("🗑 Backup löschen")
         rename_action = menu.addAction("✏️ Backup umbenennen")
-        favorite_action = menu.addAction("⭐ Als Favorit markieren")
+
+        favorites = self.savegames[self.selected_game].get("favorites", [])
+        is_favorite = backup_name in favorites
+
+        if is_favorite:
+            unfav_action = menu.addAction("❌ Favoriten entfernen")
+        else:
+            fav_action = menu.addAction("⭐ Als Favorit markieren")
 
         action = menu.exec_(self.backup_list.viewport().mapToGlobal(pos))
-        backup_name = item.text()
 
         if action == delete_action:
             reply = QMessageBox.question(self, "Backup löschen", f"Backup '{backup_name}' wirklich löschen?",
@@ -553,7 +563,6 @@ class BackupApp(QWidget):
                     if backup_name in notes:
                         del notes[backup_name]
 
-                    favorites = self.savegames[self.selected_game].get("favorites", [])
                     if backup_name in favorites:
                         favorites.remove(backup_name)
 
@@ -574,12 +583,10 @@ class BackupApp(QWidget):
                 try:
                     os.rename(old_path, new_path)
 
-                    # Notizen & Favoriten umbenennen
                     notes = self.savegames[self.selected_game].get("notes", {})
                     if backup_name in notes:
                         notes[new_name] = notes.pop(backup_name)
 
-                    favorites = self.savegames[self.selected_game].get("favorites", [])
                     if backup_name in favorites:
                         favorites.remove(backup_name)
                         favorites.append(new_name)
@@ -589,12 +596,13 @@ class BackupApp(QWidget):
                 except Exception as e:
                     QMessageBox.warning(self, "Fehler", f"Umbenennen fehlgeschlagen: {e}")
 
-        elif action == favorite_action:
-            favorites = self.savegames[self.selected_game].setdefault("favorites", [])
-            if backup_name not in favorites:
-                favorites.append(backup_name)
-            else:
-                favorites.remove(backup_name)  # Toggle-Funktion
+        elif not is_favorite and action == fav_action:
+            favorites.append(backup_name)
+            self.save_savegames()
+            self.refresh_lists()
+
+        elif is_favorite and action == unfav_action:
+            favorites.remove(backup_name)
             self.save_savegames()
             self.refresh_lists()
 
