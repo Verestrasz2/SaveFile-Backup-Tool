@@ -376,7 +376,7 @@ class BackupApp(QWidget):
             backups.sort(key=parse_date, reverse=True)  # Neueste zuerst
 
             notes = self.savegames[self.selected_game].get("notes", {})
-            favorites = self.savegames[self.selected_game].get("favorites", [])
+            favorites = self.savegames[self.selected_game].get("favorites", {})
 
             for date in backups:
                 item = QListWidgetItem(date)
@@ -433,6 +433,7 @@ class BackupApp(QWidget):
         # Speichere die Liste der Dateien als Notiz zum Backup
         notes = self.savegames[self.selected_game].setdefault("notes", {})
         notes[now] = "Backed up files:\n" + "\n".join(copied_files)
+        self.savegames[self.selected_game].setdefault("favorites", [])
         self.save_savegames()
 
         QMessageBox.information(self, "Backup erstellt", f"Backup mit {len(copied_files)} Datei(en) wurde erstellt.")

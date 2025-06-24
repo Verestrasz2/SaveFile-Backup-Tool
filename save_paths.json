@@ -5,12 +5,16 @@
     "notes": {
       "2025-06-07_20-18-10": "Backed up files:\nSS1_data337Slot.bin\nSS1_data001Slot.bin\nSS1_data036Slot.bin\nSS1_data037Slot.bin",
       "07.06.2025_21-41-23": "Backed up files:\nSS1_data337Slot.bin",
-      "2025-06-07_21-31-29 was geht": "Backed up files:\nSS1_data337Slot.bin"
+      "2025-06-07_21-31-29 was geht": "Backed up files:\nSS1_data337Slot.bin",
+      "09.06.2025_18-00-42": "Backed up files:\nSS1_data337Slot.bin\nSS1_data037Slot.bin",
+      "09.06.2025_18-02-34": "Backed up files:\nSS1_data337Slot.bin\nSS1_data037Slot.bin"
     },
     "favorites": [
       "2025-06-07_20-04-09",
-      "was geht",
-      "2025-06-07_21-31-29 was geht"
+      "2025-06-07_20-04-21",
+      "07.06.2025_21-41-23",
+      "2025-06-07_17-28-43",
+      "09.06.2025_17-55-19"
     ]
   },
   "world": {
@@ -39,5 +43,12 @@
   "Monster Hunter Wilds": {
     "path": "D:/GAME_SAVES/MHWilds-Backup/Backup 29-03-2025 23-50/C/Program Files (x86)/Steam/userdata/110106957/3065170/remote/win64_save",
     "icon": ""
+  },
+  "AUgust-Test": {
+    "path": "D:/GAME_SAVES/MH-Rise_Saves/mh rise/august_22",
+    "icon": "",
+    "notes": {
+      "09.06.2025_18-01-57": "Backed up files:\nSS1_data037Slot.bin\nSS1_data337Slot.bin"
+    }
   }
 }
