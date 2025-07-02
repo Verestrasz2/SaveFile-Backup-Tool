@@ -327,6 +327,14 @@ class BackupApp(QWidget):
             confirm = QMessageBox.question(self, "Löschen bestätigen", f"{game} wirklich löschen?", QMessageBox.Yes | QMessageBox.No)
             if confirm == QMessageBox.Yes:
                 self.savegames.pop(game)
+                # Backup-Ordner löschen
+                backup_path = os.path.join(BACKUP_DIR, game)
+                if os.path.exists(backup_path):
+                    try:
+                        shutil.rmtree(backup_path)
+                    except Exception as e:
+                        QMessageBox.warning(self, "Fehler", f"Backup-Ordner konnte nicht gelöscht werden:\n{e}")
+
                 self.save_savegames()
                 self.refresh_game_dropdown()
                 self.save_list.clear()
